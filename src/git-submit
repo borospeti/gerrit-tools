@@ -1,0 +1,184 @@
+#!/bin/bash
+
+#
+#  License: BSD compatible
+#
+#   Author: peter@boros.no
+#   Author: bjarneh@ifi.uio.no
+#
+
+#  Globals
+
+DRY_RUN=""
+REVIEWERS=""
+BRANCH=""
+REMOTE_BRANCH=""
+
+
+__git_submit_die() {
+    >&2 echo "$1";
+    exit 1
+}
+
+
+__git_submit_usage() {
+
+cat <<EOF
+
+ usage: git submit [OPTIONS]
+
+ options:
+  -h --help      : print this menu and exit
+  -R --remote    : specify remote branch
+  -r --reviewer  : specify reviewer(s)
+  -n --dryrun    : print what we would do
+
+EOF
+
+}
+
+
+__git_submit_dryrun() {
+
+cat <<EOF
+
+   branch=${BRANCH}
+   merge=${REMOTE_BRANCH}
+   remote=${REMOTE}
+   reviewers=${REVIEWERS}
+   git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${REVIEWERS}
+
+EOF
+    exit 0
+}
+
+
+__git_submit_find_current_branch() {
+
+    BRANCH=$(git symbolic-ref HEAD 2>/dev/null)
+    case "${BRANCH}" in
+        refs/heads/*)
+            BRANCH="${BRANCH:11}"
+            ;;
+        *)
+            __git_submit_die "I can't figure out which branch you are on."
+            ;;
+    esac
+}
+
+
+__git_submit_missing_remote() {
+
+>&2 cat <<EOF
+
+ There is no tracking information for the current branch.
+ If you wish to set tracking information for this branch you can do so with:
+
+     git branch --set-upstream ${BRANCH} <remote>/<branch>
+
+EOF
+
+    exit 1
+
+}
+
+
+__git_submit_find_remote() {
+
+    REMOTE=$(git config --get "branch.${BRANCH}.remote")
+    if [ -z "${REMOTE}" ]; then
+        REMOTE="origin"
+    fi
+
+}
+
+
+# String split in Bash
+# http://stackoverflow.com/a/918931/447838
+#
+# NOTE:
+# We assume usernames (for reviewers) has no whitespace,
+# since that will break stuff later anyway, although this
+# function does support whitespace between delimiters...
+__git_submit_append_reviewers() {
+
+    while IFS=',' read -ra REV; do
+       for i in "${REV[@]}"; do
+           if [ -z "${REVIEWERS}" ]; then
+               REVIEWERS="%r=${i}"
+           else
+               REVIEWERS="${REVIEWERS},r=${i}"
+           fi
+       done
+    done <<< "$1"
+
+}
+
+
+# Doesn't use getopts since it only supports single char flags
+__git_submit_parse_argv() {
+
+    while [[ $# > 0 ]]; do
+
+        key="$1"
+
+        case "${key}" in
+            -h|-help|--help|help)
+                __git_submit_usage && exit 1
+                ;;
+            -r|-reviewer|--reviewer)
+                if [ -z "$2" ]; then
+                    __git_submit_die "Missing argument for: ${key}";
+                fi
+                __git_submit_append_reviewers "$2"
+                shift # past argument
+                ;;
+            -r=*)
+                __git_submit_append_reviewers "${1:3}"
+                ;;
+            -reviewer=*)
+                __git_submit_append_reviewers "${1:10}"
+                ;;
+            --reviewer=*)
+                __git_submit_append_reviewers "${1:11}"
+                ;;
+            -R|-remote|--remote)
+                if [ -z "$2" ]; then
+                    __git_submit_die "Missing argument for: ${key}";
+                fi
+                REMOTE="$2"
+                shift # past argument
+                ;;
+            -R=*)
+                REMOTE="${1:3}"
+                ;;
+            -remote=*)
+                REMOTE="${1:8}"
+                ;;
+            --remote=*)
+                REMOTE="${1:9}"
+                ;;
+            -n|--dry-run|--dryrun|-dryrun|-dry-run)
+                DRY_RUN="1"
+                ;;
+            *)
+                __git_submit_die "Unknown option: ${key}"
+                ;;
+        esac
+        shift # past argument or value
+    done
+
+}
+
+
+# main
+{
+    __git_submit_parse_argv "${@}"
+    __git_submit_find_current_branch
+    REMOTE_BRANCH=$(git config --get "branch.${BRANCH}.merge" 2>/dev/null)
+    [ -z "${REMOTE_BRANCH}" ] && __git_submit_missing_remote
+    [ -z "${REMOTE}"  ] && __git_submit_find_remote
+    [ -z "${DRY_RUN}" ] || __git_submit_dryrun
+    #echo "git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${REVIEWERS}"
+    git push "${REMOTE}" HEAD:refs/for/"${REMOTE_BRANCH}${REVIEWERS}"
+}
