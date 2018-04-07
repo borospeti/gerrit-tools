@@ -74,7 +74,7 @@ __git_submit_missing_remote() {
  There is no tracking information for the current branch.
  If you wish to set tracking information for this branch you can do so with:
 
-     git branch --set-upstream ${BRANCH} <remote>/<branch>
+     git branch --set-upstream-to <remote>/<branch>
 
 EOF
 
