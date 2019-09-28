@@ -1,4 +1,4 @@
-.TH "GIT\-SUBMIT" "1" "09/22/2015" "Git extension" "Gerrit Tools"
+.TH "GIT\-SUBMIT" "1" "2019-09-28" "Git extension" "Gerrit Tools"
 .ie \n(.g .ds Aq \(aq
 .el       .ds Aq '
 .nh
@@ -8,14 +8,18 @@ git-submit \- Submit commit(s) for Gerrit code review
 .SH "SYNOPSIS"
 .sp
 .nf
-\fIgit submit \fR [\-r | \-\-reviewer REVIEWER] [\-R | \-\-remote REMOTE] [\-n]
+\fIgit submit \fR [\-r | \-\-reviewer REVIEWER] [\-c | \-\-cc CC]
+            [\-t | \-\-topic TOPIC]
+            [\-w | \-\-wip] [\-W | \-\-ready]
+            [\-p | \-\-private] [\-P | \-\-remove\-private]
+            [\-R | \-\-remote REMOTE] [\-n]
 .fi
 .sp
 .SH "DESCRIPTION"
 .sp
 This command submits committed changed for Gerrit code review\&. It is equivalent to pushing the current branch to the special Gerrit refs/for/[BRANCH]\&.
 .sp
-The command automatically detects the current branch, and selects the remote branch based on the configuration, unless the remote is explicitely specified on the command line\&. It also allows reviewers to be specified directly\&.
+The command automatically detects the current branch, and selects the remote branch based on the configuration, unless the remote is explicitely specified on the command line\&. It also allows reviewers, and a number of other options (such as Work\-in\-Progress/ready, private, or topic), to be specified directly\&.
 .SH "OPTIONS"
 .PP
 \-n, \-\-dry\-run
@@ -26,6 +30,36 @@ Don\(cqt actually submit the review(s), just show the git command which would be
 \-r, \-\-reviewer REVIEWER
 .RS 4
 Add a reviewer for the review\&. REVIEWER can be eiher a Gerrit username or an email address\&. Multiple reviers can be added separated by comma, or by repeated use of this option\&.
+.RE
+.PP
+\-c, \-\-cc CC
+.RS 4
+Add users to receive Cc: (carbon copy) of the review\&. CC can be eiher a Gerrit username or an email address\&. Multiple Cc: users can be added separated by comma, or by repeated use of this option\&.
+.RE
+.PP
+\-t, \-\-topic TOPIC
+.RS 4
+Set the topic for the review\&.
+.RE
+.PP
+\-w, \-\-wip
+.RS 4
+Set the review as WIP (Work\-in\-Progress)\&. Work\-in\-Progress changes are visible to anyone, but do not notify or require an action from a reviewer\&.
+.RE
+.PP
+\-W, \-\-ready
+.RS 4
+Set the review as ready (remove the WIP flag)\&.
+.RE
+.PP
+\-p, \-\-private
+.RS 4
+Set the review as private\&. Private changes are changes that are only visible to their owners, reviewers and users with the View Private Changes global capability\&.
+.RE
+.PP
+\-P, \-\-remove\-private
+.RS 4
+Remove the private flag from the review\&.
 .RE
 .PP
 \-R, \-\-remote REMOTE
@@ -48,7 +82,7 @@ Submit commits for review to default remote, adding "tom" and "jerry" as reviewe
 .RS 4
 .\}
 .nf
-$ git submit -r tom,jerry
+$ git submit \-r tom,jerry
 .fi
 .if n \{\
 .RE
@@ -67,7 +101,45 @@ Submit commits for review to 'origin' remote explicitely, without specifying rev
 .RS 4
 .\}
 .nf
-$ git submit --remote=origin
+$ git submit \-\-remote=origin
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Submit commits as a private, Work\-in\-Progress review.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git submit \-p \-w
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Set the commits ready for review, remove private flag, set the topic and add some reviwers.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ git submit \-\-ready \-\-remove\-private \-\-reviewer=tom,jerry \-\-topic=bugfix
 .fi
 .if n \{\
 .RE

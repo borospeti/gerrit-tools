@@ -10,7 +10,7 @@
 #  Globals
 
 DRY_RUN=""
-REVIEWERS=""
+SUBMIT_OPTIONS=""
 BRANCH=""
 REMOTE_BRANCH=""
 
@@ -28,10 +28,16 @@ cat <<EOF
  usage: git submit [OPTIONS]
 
  options:
-  -h --help      : print this menu and exit
-  -R --remote    : specify remote branch
-  -r --reviewer  : specify reviewer(s)
-  -n --dryrun    : print what we would do
+  -h --help             : print this menu and exit
+  -r --reviewer         : specify reviewer(s)
+  -c --cc               : specify users to receive carbon copy
+  -w --wip              : set the submitted changes to WIP (Work-in-Progress)
+  -W --ready            : mark the submitted changes ready (clear WIP status)
+  -p --private          : set the submitted changes private
+  -P --remove-private   : remove the private flag from the submitted changes
+  -t --topic            : set the topic of the submitted change
+  -R --remote           : specify remote branch
+  -n --dryrun           : print what we would do
 
 EOF
 
@@ -45,8 +51,8 @@ cat <<EOF
    branch=${BRANCH}
    merge=${REMOTE_BRANCH}
    remote=${REMOTE}
-   reviewers=${REVIEWERS}
-   git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${REVIEWERS}
+   submit_options=${SUBMIT_OPTIONS}
+   git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${SUBMIT_OPTIONS}
 
 EOF
     exit 0
@@ -93,24 +99,46 @@ __git_submit_find_remote() {
 }
 
 
+# The first option is separated from the reference
+# by a '%', any further options are appended with
+# a comma.
+__git_submit_append_option() {
+
+    local OPTION=$1
+    if [ -z "${SUBMIT_OPTIONS}" ]; then
+        SUBMIT_OPTIONS="%${OPTION}"
+    else
+        SUBMIT_OPTIONS="${SUBMIT_OPTIONS},${OPTION}"
+    fi
+
+}
+
+# Either: __git_submit_append_options option
+# or:     __git_submit_append_options option values
+# where values can be a single value or a comma separated list
+# of multiple values
+#
 # String split in Bash
 # http://stackoverflow.com/a/918931/447838
 #
 # NOTE:
-# We assume usernames (for reviewers) has no whitespace,
-# since that will break stuff later anyway, although this
-# function does support whitespace between delimiters...
-__git_submit_append_reviewers() {
+# We assume usernames (for reviewers, cc), topics, or any
+# other option values have no whitespace, since that will
+# break stuff later anyway, although this function does
+# support whitespace between delimiters...
+__git_submit_append_options() {
 
-    while IFS=',' read -ra REV; do
-       for i in "${REV[@]}"; do
-           if [ -z "${REVIEWERS}" ]; then
-               REVIEWERS="%r=${i}"
-           else
-               REVIEWERS="${REVIEWERS},r=${i}"
-           fi
-       done
-    done <<< "$1"
+    local OPTION=$1
+    local VALUE
+    if [ -z "$2" ]; then
+        __git_submit_append_option "${OPTION}"
+    else
+        while IFS=',' read -ra VALUE; do
+            for i in "${VALUE[@]}"; do
+                __git_submit_append_option "${OPTION}=${i}"
+            done
+        done <<< "$2"
+    fi
 
 }
 
@@ -130,17 +158,61 @@ __git_submit_parse_argv() {
                 if [ -z "$2" ]; then
                     __git_submit_die "Missing argument for: ${key}";
                 fi
-                __git_submit_append_reviewers "$2"
+                __git_submit_append_options "r" "$2"
                 shift # past argument
                 ;;
             -r=*)
-                __git_submit_append_reviewers "${1:3}"
+                __git_submit_append_options "r" "${1:3}"
                 ;;
             -reviewer=*)
-                __git_submit_append_reviewers "${1:10}"
+                __git_submit_append_options "r" "${1:10}"
                 ;;
             --reviewer=*)
-                __git_submit_append_reviewers "${1:11}"
+                __git_submit_append_options "r" "${1:11}"
+                ;;
+            -c|-cc|--cc)
+                if [ -z "$2" ]; then
+                    __git_submit_die "Missing argument for: ${key}";
+                fi
+                __git_submit_append_options "cc" "$2"
+                shift # past argument
+                ;;
+            -c=*)
+                __git_submit_append_options "cc" "${1:3}"
+                ;;
+            -cc=*)
+                __git_submit_append_options "cc" "${1:4}"
+                ;;
+            --cc=*)
+                __git_submit_append_options "cc" "${1:5}"
+                ;;
+            -t|-topic|--topic)
+                if [ -z "$2" ]; then
+                    __git_submit_die "Missing argument for: ${key}";
+                fi
+                __git_submit_append_options "topic" "$2"
+                shift # past argument
+                ;;
+            -t=*)
+                __git_submit_append_options "topic" "${1:3}"
+                ;;
+            -topic=*)
+                __git_submit_append_options "topic" "${1:7}"
+                ;;
+            --topic=*)
+                __git_submit_append_options "topic" "${1:5}"
+                ;;
+            -w|-wip|--wip)
+                __git_submit_append_options "wip"
+                ;;
+            -W|-ready|--ready)
+                __git_submit_append_options "ready"
+                ;;
+            -p|-private|--private)
+                __git_submit_append_options "private"
+                ;;
+            -P|-remove-private|--remove-private)
+                __git_submit_append_options "remove-private"
                 ;;
             -R|-remote|--remote)
                 if [ -z "$2" ]; then
@@ -179,6 +251,6 @@ __git_submit_parse_argv() {
     [ -z "${REMOTE_BRANCH}" ] && __git_submit_missing_remote
     [ -z "${REMOTE}"  ] && __git_submit_find_remote
     [ -z "${DRY_RUN}" ] || __git_submit_dryrun
-    #echo "git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${REVIEWERS}"
-    git push "${REMOTE}" HEAD:refs/for/"${REMOTE_BRANCH}${REVIEWERS}"
+    #echo "git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${SUBMIT_OPTIONS}"
+    git push "${REMOTE}" HEAD:refs/for/"${REMOTE_BRANCH}${SUBMIT_OPTIONS}"
 }
