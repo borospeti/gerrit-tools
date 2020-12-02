@@ -12,7 +12,9 @@ git-submit \- Submit commit(s) for Gerrit code review
             [\-t | \-\-topic TOPIC]
             [\-w | \-\-wip] [\-W | \-\-ready]
             [\-p | \-\-private] [\-P | \-\-remove\-private]
-            [\-R | \-\-remote REMOTE] [\-n]
+            [\-R | \-\-remote REMOTE]
+            [\-b | \-\-branch]
+            [\-n | \-\-dry\-run]
 .fi
 .sp
 .SH "DESCRIPTION"
@@ -64,7 +66,12 @@ Remove the private flag from the review\&.
 .PP
 \-R, \-\-remote REMOTE
 .RS 4
-Push to the specified remote instead of the branch / project default.\&.
+Push to the specified remote instead of the branch / project default\&.
+.RE
+.PP
+\-b, \-\-branch
+.RS 4
+Try to create a new remote branch, if no remote branch has been configured for the current local branch\&. The name of the new remote branch is determined from the local branch, and the branch point will be the first ancestor which is part of an existing remote branch\&. The command fails if no such ancestor is found, a remote branch with the same name already exists, the user does not have ssh command privileges on the server or lacks the Create-Reference privilege on the project\&.
 .RE
 .SH "EXAMPLES"
 .sp

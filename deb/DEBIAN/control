@@ -3,7 +3,7 @@ Priority: optional
 Section: vcs
 Maintainer: Peter Boros <peter@boros.no>
 Architecture: all
-Version: 0.1.2
+Version: 0.1.3
 Depends: git, bash
 Description: tools and scripts for gerrit
   Git extensions, scripts, tools for the Gerrit code review tool.

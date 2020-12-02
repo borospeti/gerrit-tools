@@ -36,11 +36,11 @@ cat <<EOF
   -p --private          : set the submitted changes private
   -P --remove-private   : remove the private flag from the submitted changes
   -t --topic            : set the topic of the submitted change
-  -R --remote           : specify remote branch
+  -R --remote           : specify remote
+  -b --branch           : create a new remote branch
   -n --dryrun           : print what we would do
 
 EOF
-
 }
 
 
@@ -73,7 +73,7 @@ __git_submit_find_current_branch() {
 }
 
 
-__git_submit_missing_remote() {
+__git_submit_missing_remote_no_create() {
 
 >&2 cat <<EOF
 
@@ -82,12 +82,91 @@ __git_submit_missing_remote() {
 
      git branch --set-upstream-to <remote>/<branch>
 
+ Alternatively, you can run git submit with the --branch option and create a
+ new remote branch based on the local branch of your change(s).
+
 EOF
 
     exit 1
-
 }
 
+__git_submit_missing_remote_ancestor() {
+
+>&2 cat <<EOF
+
+ Could not find a remote ancestor for the commit, unable to determine the branch
+ point for the new branch.
+
+EOF
+
+    exit 1
+}
+
+__git_submit_url_parse_failed() {
+
+>&2 cat <<EOF
+
+ Could not parse the url for the remote ${REMOTE}, unable to create the remote branch.
+
+EOF
+
+    exit 1
+}
+
+__git_submit_create_branch_failed() {
+
+>&2 cat <<EOF
+
+ Could not create the branch on the Gerrit server. It is possible that a remote branch
+ with that name already exists, the server does not allow ssh commands, or you do not
+ have the Create-Reference privilege on the project.
+
+EOF
+
+    exit 1
+}
+
+__git_submit_create_remote_branch() {
+
+    local COMMIT='HEAD'
+    local ANCESTOR
+    local COMMIT_ID
+    local URL_REGEX
+    while true; do
+        ANCESTOR=$(git branch -r --contains "$COMMIT" 2>/dev/null)
+        [ $? -ne 0 ] && __git_submit_missing_remote_ancestor
+        [ -n "${ANCESTOR}" ] && break
+        COMMIT="${COMMIT}^"
+    done
+    COMMIT_ID=$(git rev-parse ${COMMIT})
+
+    REMOTE_URL=$(git config --get "remote.${REMOTE}.url" 2>/dev/null)
+    URL_REGEX='^ssh://([^:]+):([0-9]+)/(.+)$'
+    [[ $REMOTE_URL =~ $URL_REGEX ]]
+    [ -z "${BASH_REMATCH[1]}" -o -z "${BASH_REMATCH[2]}" -o -z "${BASH_REMATCH[3]}" ] && __git_submit_url_parse_failed
+
+    REMOTE_BRANCH=${BRANCH}
+    if [ -n "${DRY_RUN}" ]; then
+cat <<EOF
+
+   ssh -p "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}" gerrit \\
+       create-branch "${BASH_REMATCH[3]}" "${BRANCH}" "${COMMIT_ID}"
+   git branch --set-upstream-to "${REMOTE}/${BRANCH}"
+
+EOF
+    else
+        ssh -p "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}" gerrit \
+            create-branch "${BASH_REMATCH[3]}" "${BRANCH}" "${COMMIT_ID}" || __git_submit_create_branch_failed
+        git fetch "${REMOTE}" "${BRANCH}"
+        git branch --set-upstream-to "${REMOTE}/${BRANCH}"
+    fi
+}
+
+__git_submit_missing_remote() {
+
+    [ -z "${CREATE_BRANCH}" ] && __git_submit_missing_remote_no_create
+    __git_submit_create_remote_branch
+}
 
 __git_submit_find_remote() {
 
@@ -95,7 +174,6 @@ __git_submit_find_remote() {
     if [ -z "${REMOTE}" ]; then
         REMOTE="origin"
     fi
-
 }
 
 
@@ -110,7 +188,6 @@ __git_submit_append_option() {
     else
         SUBMIT_OPTIONS="${SUBMIT_OPTIONS},${OPTION}"
     fi
-
 }
 
 # Either: __git_submit_append_options option
@@ -230,6 +307,9 @@ __git_submit_parse_argv() {
             --remote=*)
                 REMOTE="${1:9}"
                 ;;
+            -b|-branch|--branch)
+                CREATE_BRANCH="1"
+                ;;
             -n|--dry-run|--dryrun|-dryrun|-dry-run)
                 DRY_RUN="1"
                 ;;
@@ -247,9 +327,9 @@ __git_submit_parse_argv() {
 {
     __git_submit_parse_argv "${@}"
     __git_submit_find_current_branch
+    [ -z "${REMOTE}"  ] && __git_submit_find_remote
     REMOTE_BRANCH=$(git config --get "branch.${BRANCH}.merge" 2>/dev/null)
     [ -z "${REMOTE_BRANCH}" ] && __git_submit_missing_remote
-    [ -z "${REMOTE}"  ] && __git_submit_find_remote
     [ -z "${DRY_RUN}" ] || __git_submit_dryrun
     #echo "git push ${REMOTE} HEAD:refs/for/${REMOTE_BRANCH}${SUBMIT_OPTIONS}"
     git push "${REMOTE}" HEAD:refs/for/"${REMOTE_BRANCH}${SUBMIT_OPTIONS}"
